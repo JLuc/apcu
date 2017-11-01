@@ -1,4 +1,4 @@
-	<?php
+<?php
 /*
   +----------------------------------------------------------------------+
   | APC                                                                  |
@@ -1067,7 +1067,7 @@ case OB_USER_CACHE:
 
 	$cols=6;
 	echo <<<EOB
-		<div class=sorting><form>Scope:
+		<div class=sorting><form>Scope: 
 		<input type=hidden name=OB value={$MYREQUEST['OB']}>
 		<select name=SCOPE>
 EOB;
@@ -1076,7 +1076,7 @@ EOB;
 		"<option value=D",$MYREQUEST['SCOPE']=='D' ? " selected":"",">Deleted</option>",
 		"</select>",
 		
-		", Sorting:<select name=SORT1>",
+		" Sorting:<select name=SORT1>",
 		"<option value=H",$MYREQUEST['SORT1']=='H' ? " selected":"",">Hits</option>",
 		"<option value=Z",$MYREQUEST['SORT1']=='Z' ? " selected":"",">Size</option>",
 		"<option value=S",$MYREQUEST['SORT1']=='S' ? " selected":"",">$fieldheading</option>",
@@ -1108,20 +1108,20 @@ EOB;
 		'&nbsp;<input type=submit value="GO!">',
 		
 		'<br>',
-		'Type caches',
+		'Type caches: ',
 		'<select name=TYPECACHE  onChange="form.submit()">',
 		'<option value=ALL',$MYREQUEST['TYPECACHE']=='ALL' ? ' selected':'','>Tous</option>',
 		'<option value=SESSIONS',$MYREQUEST['TYPECACHE']=='SESSIONS' ? ' selected':'','>Sessionnés</option>',
 		'<option value=SESSIONS_AUTH',$MYREQUEST['TYPECACHE']=='SESSIONS_AUTH' ? ' selected':'','>Sessionnés identifiés</option>',
 		'</select>',
 
-		'Textes zooms',
+		'&nbsp;&nbsp;Textes zooms: ',
 		'<select name=ZOOM  onChange="form.submit()">',
 		'<option value=TEXTECOURT',$MYREQUEST['ZOOM']=='TEXTECOURT' ? ' selected':'','>Courts</option>',
 		'<option value=TEXTELONG',$MYREQUEST['ZOOM']=='TEXTELONG' ? ' selected':'','>Entiers</option>',
 		'</select>',
 
-		'Affichage extra',
+		'&nbsp;&nbsp;Affichage extra: ',
 		'<select name=EXTRA  onChange="form.submit()">',
 		'<option value="" ',$MYREQUEST['EXTRA']=='' ? ' selected':'','></option>',
 		'<option value=CONTEXTE ',$MYREQUEST['EXTRA']=='CONTEXTE' ? ' selected':'','>Contexte</option>',
@@ -1221,24 +1221,37 @@ EOB;
 					and $success and is_array($data) and (count ($data)==1) 
 					and is_serialized($data[0])) {
 				$data = unserialize($data[0]);
-				switch ($MYREQUEST['EXTRA']) {
-				case 'CONTEXTE' :
-					$extra = $data['contexte'];
-					break;
-				case 'CONTEXTE_SPECIAUX' :
-					$extra = $data['contexte'];
-					foreach (array ('lang', 'date', 'date_default', 'date_redac', 'date_redac_default') as $k)
-						unset($extra[$k]);
-					break;
-				case 'INVALIDEURS' :
-					$extra = $data['invalideurs'];
-					break;
-				case 'INVALIDEURS_SPECIAUX' :
-					$extra = $data['invalideurs'];
-					foreach (array ('cache', 'session') as $k)
-						unset($extra[$k]);
-					break;
+				if (is_array($data)) {
+					switch ($MYREQUEST['EXTRA']) {
+					case 'CONTEXTE' :
+						if (isset($data['contexte']))
+							$extra = $data['contexte'];
+						else 
+							$extra = 'undefined';
+						break;
+					case 'CONTEXTE_SPECIAUX' :
+						if (isset($data['contexte'])) {
+							$extra = $data['contexte'];
+							foreach (array ('lang', 'date', 'date_default', 'date_redac', 'date_redac_default') as $k)
+								unset($extra[$k]);
+						}
+						else 
+							$extra = 'undefined';
+						break;
+					case 'INVALIDEURS' :
+						$extra = $data['invalideurs'];
+						break;
+					case 'INVALIDEURS_SPECIAUX' :
+						$extra = $data['invalideurs'];
+						foreach (array ('cache', 'session') as $k)
+							unset($extra[$k]);
+						break;
+					}
 				}
+				else
+					$extra = null;
+				if ($extra == 'undefined')
+					$extra = array ('contexte non défini' => 'vrai');
 				if ($extra = print_array_content($extra, 1))
 					echo "<br><xmp>    $extra</xmp>";
 			};
