@@ -1,4 +1,4 @@
-<?php
+	<?php
 /*
   +----------------------------------------------------------------------+
   | APC                                                                  |
@@ -237,8 +237,8 @@ $vardom=array(
 	'AGGR'	=> '/^\d+$/',			// aggregation by dir level
 	'SEARCH'	=> '~^[a-zA-Z0-9/_.-]*$~',			// aggregation by dir level
 	'TYPECACHE' => '/^(ALL|SESSIONS|SESSIONS_AUTH)$/',	//
-	'ZOOM' => '/^(TEXTECOURT|TEXTELONG)$/',	//
-	'EXTRA' => '/^(CONTEXTE|CONTEXTE_SPECIAUX|INVALIDEURS|INVALIDEURS_SPECIAUX)$/',	//
+	'ZOOM' => '/^(|TEXTECOURT|TEXTELONG)$/',	//
+	'EXTRA' => '/^(|CONTEXTE|CONTEXTE_SPECIAUX|INVALIDEURS|INVALIDEURS_SPECIAUX)$/',	//
 );
 
 // cache scope
@@ -262,11 +262,12 @@ if (empty($_REQUEST)) {
 
 // check parameter syntax
 foreach($vardom as $var => $dom) {
-	if (!isset($_REQUEST[$var])) {
+	if (!isset($_REQUEST[$var]))
 		$MYREQUEST[$var]=NULL;
-	} else if (!is_array($_REQUEST[$var]) && preg_match($dom.'D',$_REQUEST[$var])) {
+	else if (!is_array($_REQUEST[$var]) && preg_match($dom.'D',$_REQUEST[$var]))
 		$MYREQUEST[$var]=$_REQUEST[$var];
-	} else {
+	else {
+		echo "<xmp>ERREUR avec parametre d'url « $var » qui vaut « {$_REQUEST[$var]} »</xmp>";
 		$MYREQUEST[$var]=$_REQUEST[$var]=NULL;
 	}
 }
@@ -284,7 +285,10 @@ $MY_SELF=
 	"?SCOPE=".$MYREQUEST['SCOPE'].
 	"&SORT1=".$MYREQUEST['SORT1'].
 	"&SORT2=".$MYREQUEST['SORT2'].
-	"&COUNT=".$MYREQUEST['COUNT'];
+	"&COUNT=".$MYREQUEST['COUNT'].
+	"&SEARCH=".$MYREQUEST['SEARCH']; // AJOUTÉ
+echo "<H1>MY_SELF=$MY_SELF</H1>";
+
 $MY_SELF_WO_SORT=
 	"$PHP_SELF".
 	"?SCOPE=".$MYREQUEST['SCOPE'].
@@ -1214,7 +1218,7 @@ EOB;
         echo
           '<tr id="key-'. $sh .'" class=tr-',$i%2,'>',
           "<td class=td-0>
-			<a href=\"$MY_SELF&OB=",$MYREQUEST['OB'],"&SH={$sh}&TYPECACHE={$TYPECACHE}&ZOOM={$MYREQUEST['ZOOM']}&EXTRA={$MYREQUEST['EXTRA']}#key-{$sh}\">",$field_value,'</a>';
+			<a href=\"$MY_SELF&OB={$MYREQUEST['OB']}&SH={$sh}&TYPECACHE={$TYPECACHE}&ZOOM={$MYREQUEST['ZOOM']}&EXTRA={$MYREQUEST['EXTRA']}#key-{$sh}\">",$field_value,'</a>';
 			if ($MYREQUEST['EXTRA'] 
 					and apcu_exists($entry['info'])
 					and ($data = apcu_fetch($entry['info'], $success))
