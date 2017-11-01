@@ -1,4 +1,4 @@
-<?php
+	<?php
 /*
   +----------------------------------------------------------------------+
   | APC                                                                  |
@@ -66,13 +66,26 @@ function get_serial_class($serial) {
 }
 function spipsafe_unserialize($str) {
 	if (strpos($str, "SPIPTextWheelRuleset") !== false)
-		return "Serialized : $str";
+		return "Brut : $str";
 	$unser = unserialize($str);
 	if (is_array($unser) and isset ($unser['texte'])
-		and isset($_GET['texte']) and ($_GET['texte']=='court'))
-		$unser['texte'] = substr(trim($unser['texte']), 0, 80).'...';
+		and isset($_GET['ZOOM']) and ($_GET['ZOOM']=='TEXTECOURT')) {
+		$unser['texte-bref'] = substr(trim($unser['texte']), 0, 80);
+		$unser['texte-bref'] = preg_replace ('/\s+/', ' ', $unser['texte']).'...';
+		unset ($unser['texte']);
+	}
 	return "Unserialized : ".print_r($unser,1);
 }
+function print_array_content($extra, $tostring) {
+	$print = print_r($extra, 1);
+	if (stripos($print, 'Array') === 0)  {
+		$print = ltrim (substr($print, 5), " (\n\r\t");
+		$print = rtrim ($print, ") \n\r\t");
+	}
+	if ($tostring)
+		return $print;
+	echo $print;
+};
 
 /**
  * Prend une URL et lui ajoute/retire un paramètre
@@ -224,6 +237,8 @@ $vardom=array(
 	'AGGR'	=> '/^\d+$/',			// aggregation by dir level
 	'SEARCH'	=> '~^[a-zA-Z0-9/_.-]*$~',			// aggregation by dir level
 	'TYPECACHE' => '/^(ALL|SESSIONS|SESSIONS_AUTH)$/',	//
+	'ZOOM' => '/^(TEXTECOURT|TEXTELONG)$/',	//
+	'EXTRA' => '/^(CONTEXTE|CONTEXTE_SPECIAUX|INVALIDEURS|INVALIDEURS_SPECIAUX)$/',	//
 );
 
 // cache scope
@@ -1091,12 +1106,28 @@ EOB;
 		'</select>',
     '&nbsp; Search: <input name=SEARCH value="',$MYREQUEST['SEARCH'],'" type=text size=25/>',
 		'&nbsp;<input type=submit value="GO!">',
-
+		
+		'<br>',
 		'Type caches',
-		'<select name=TYPECACHE>',
+		'<select name=TYPECACHE  onChange="form.submit()">',
 		'<option value=ALL',$MYREQUEST['TYPECACHE']=='ALL' ? ' selected':'','>Tous</option>',
 		'<option value=SESSIONS',$MYREQUEST['TYPECACHE']=='SESSIONS' ? ' selected':'','>Sessionnés</option>',
 		'<option value=SESSIONS_AUTH',$MYREQUEST['TYPECACHE']=='SESSIONS_AUTH' ? ' selected':'','>Sessionnés identifiés</option>',
+		'</select>',
+
+		'Textes zooms',
+		'<select name=ZOOM  onChange="form.submit()">',
+		'<option value=TEXTECOURT',$MYREQUEST['ZOOM']=='TEXTECOURT' ? ' selected':'','>Courts</option>',
+		'<option value=TEXTELONG',$MYREQUEST['ZOOM']=='TEXTELONG' ? ' selected':'','>Entiers</option>',
+		'</select>',
+
+		'Affichage extra',
+		'<select name=EXTRA  onChange="form.submit()">',
+		'<option value="" ',$MYREQUEST['EXTRA']=='' ? ' selected':'','></option>',
+		'<option value=CONTEXTE ',$MYREQUEST['EXTRA']=='CONTEXTE' ? ' selected':'','>Contexte</option>',
+		'<option value=CONTEXTE_SPECIAUX ',$MYREQUEST['EXTRA']=='CONTEXTE_SPECIAUX' ? ' selected':'','>Contexte spécifiques</option>',
+		'<option value=INVALIDEURS ',$MYREQUEST['EXTRA']=='INVALIDEURS' ? ' selected':'','>Invalideurs</option>',
+		'<option value=INVALIDEURS_SPECIAUX ',$MYREQUEST['EXTRA']=='INVALIDEURS_SPECIAUX' ? ' selected':'','>Invalideurs spécifiques</option>',
 		'</select>',
 
 		'</form></div>';
@@ -1182,7 +1213,36 @@ EOB;
         $field_value = htmlentities(strip_tags($entry[$fieldname],''), ENT_QUOTES, 'UTF-8');
         echo
           '<tr id="key-'. $sh .'" class=tr-',$i%2,'>',
-          "<td class=td-0><a href=\"$MY_SELF&OB=",$MYREQUEST['OB'],"&SH={$sh}&TYPECACHE={$TYPECACHE}#key-{$sh}\">",$field_value,'</a></td>',
+          "<td class=td-0>
+			<a href=\"$MY_SELF&OB=",$MYREQUEST['OB'],"&SH={$sh}&TYPECACHE={$TYPECACHE}&ZOOM={$MYREQUEST['ZOOM']}&EXTRA={$MYREQUEST['EXTRA']}#key-{$sh}\">",$field_value,'</a>';
+			if ($MYREQUEST['EXTRA'] 
+					and apcu_exists($entry['info'])
+					and ($data = apcu_fetch($entry['info'], $success))
+					and $success and is_array($data) and (count ($data)==1) 
+					and is_serialized($data[0])) {
+				$data = unserialize($data[0]);
+				switch ($MYREQUEST['EXTRA']) {
+				case 'CONTEXTE' :
+					$extra = $data['contexte'];
+					break;
+				case 'CONTEXTE_SPECIAUX' :
+					$extra = $data['contexte'];
+					foreach (array ('lang', 'date', 'date_default', 'date_redac', 'date_redac_default') as $k)
+						unset($extra[$k]);
+					break;
+				case 'INVALIDEURS' :
+					$extra = $data['invalideurs'];
+					break;
+				case 'INVALIDEURS_SPECIAUX' :
+					$extra = $data['invalideurs'];
+					foreach (array ('cache', 'session') as $k)
+						unset($extra[$k]);
+					break;
+				}
+				if ($extra = print_array_content($extra, 1))
+					echo "<br><xmp>    $extra</xmp>";
+			};
+          echo '</td>',
           '<td class="td-n center">',$entry['num_hits'],'</td>',
           '<td class="td-n right">',$entry['mem_size'],'</td>',
           '<td class="td-n center">',date(DATE_FORMAT,$entry['access_time']),'</td>',
@@ -1207,17 +1267,17 @@ EOB;
           echo '<td class="td-last center"> &nbsp; </td>';
         }
         echo '</tr>';
-		if ($sh == $MYREQUEST["SH"]) {
+		if ($sh == $MYREQUEST["SH"]) { // Le ZOOM sur une entrée
 			echo '<tr>';
 			echo '<td colspan="7"><pre>';
 			
 			$self = "http".(!empty($_SERVER['HTTPS'])?"s":"")."://".$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI'];
-			if (isset($_GET['texte']) and ($_GET['texte']=='court')) {
-				$url = parametre_url($self,'texte','long')."#key-$sh";
+			if (isset($_GET['ZOOM']) and ($_GET['ZOOM']=='TEXTECOURT')) {
+				$url = parametre_url($self,'ZOOM','TEXTELONG')."#key-$sh";
 				$menu = "<a href='$url'>[Voir tout le texte]</a><br>";
 			}
 			else {
-				$url = parametre_url($self,'texte','court')."#key-$sh";
+				$url = parametre_url($self,'ZOOM','TEXTECOURT')."#key-$sh";
 				$menu = "<a href='$url'>[Voir texte abbrégé]</a><br>";
 			}
 
