@@ -30,7 +30,7 @@ if (file_exists("apc.conf.php")) include("apc.conf.php");
 
 ////////// BEGIN OF DEFAULT CONFIG AREA ///////////////////////////////////////////////////////////
 
-defaults('USE_AUTHENTICATION',1);			// Use (internal) authentication - best choice if
+defaults('USE_AUTHENTICATION',0);			// Use (internal) authentication - best choice if
 											// no other authentication is available
 											// If set to 0:
 											//  There will be no further authentication. You
@@ -38,8 +38,8 @@ defaults('USE_AUTHENTICATION',1);			// Use (internal) authentication - best choi
 											// If set to 1:
 											//  You need to change ADMIN_PASSWORD to make
 											//  this work!
-defaults('ADMIN_USERNAME','apc'); 			// Admin Username
-defaults('ADMIN_PASSWORD','password');  	// Admin Password - CHANGE THIS TO ENABLE!!!
+defaults('ADMIN_USERNAME','admin'); 			// Admin Username
+defaults('ADMIN_PASSWORD', 'password');  	// Admin Password - CHANGE THIS TO ENABLE!!!
 
 // (beckerr) I'm using a clear text password here, because I've no good idea how to let
 //           users generate a md5 or crypt password in a easy way to fill it in above
@@ -47,12 +47,145 @@ defaults('ADMIN_PASSWORD','password');  	// Admin Password - CHANGE THIS TO ENAB
 //defaults('DATE_FORMAT', "d.m.Y H:i:s");	// German
 defaults('DATE_FORMAT', 'Y/m/d H:i:s'); 	// US
 
-defaults('GRAPH_SIZE',200);					// Image size
+defaults('GRAPH_SIZE',400);					// Image size
 
 //defaults('PROXY', 'tcp://127.0.0.1:8080');
 
 ////////// END OF DEFAULT CONFIG AREA /////////////////////////////////////////////////////////////
 
+// Strings utils
+
+function is_serialized($str) {
+    return ($str == serialize(false) || @unserialize($str) !== false);
+}
+function get_serial_class($serial) {
+    $types = array('s' => 'string', 'a' => 'array', 'b' => 'bool', 'i' => 'int', 'd' => 'float', 'N;' => 'NULL');
+    
+    $parts = explode(':', $serial, 4);
+    return isset($types[$parts[0]]) ? $types[$parts[0]] : trim($parts[2], '"'); 
+}
+function spipsafe_unserialize($str) {
+	if (strpos($str, "SPIPTextWheelRuleset") !== false)
+		return "Serialized : $str";
+	$unser = unserialize($str);
+	if (is_array($unser) and isset ($unser['texte'])
+		and isset($_GET['texte']) and ($_GET['texte']=='court'))
+		$unser['texte'] = substr(trim($unser['texte']), 0, 80).'...';
+	return "Unserialized : ".print_r($unser,1);
+}
+
+/**
+ * Prend une URL et lui ajoute/retire un paramètre
+ *
+ * @filtre
+ * @link http://www.spip.net/4255
+ * @example
+ *     ```
+ *     [(#SELF|parametre_url{suite,18})] (ajout)
+ *     [(#SELF|parametre_url{suite,''})] (supprime)
+ *     [(#SELF|parametre_url{suite[],1})] (tableaux valeurs multiples)
+ *     ```
+ *
+ * @param string $url URL
+ * @param string $c Nom du paramètre
+ * @param string|array|null $v Valeur du paramètre
+ * @param string $sep Séparateur entre les paramètres
+ * @return string URL
+ */
+if (!function_exists('parametre_url')) {
+function parametre_url($url, $c, $v = null, $sep = '&amp;') {
+	// requete erronnee : plusieurs variable dans $c et aucun $v
+	if (strpos($c, "|") !== false and is_null($v)) {
+		return null;
+	}
+
+	// lever l'#ancre
+	if (preg_match(',^([^#]*)(#.*)$,', $url, $r)) {
+		$url = $r[1];
+		$ancre = $r[2];
+	} else {
+		$ancre = '';
+	}
+
+	// eclater
+	$url = preg_split(',[?]|&amp;|&,', $url);
+
+	// recuperer la base
+	$a = array_shift($url);
+	if (!$a) {
+		$a = './';
+	}
+
+	$regexp = ',^(' . str_replace('[]', '\[\]', $c) . '[[]?[]]?)(=.*)?$,';
+	$ajouts = array_flip(explode('|', $c));
+	$u = is_array($v) ? $v : rawurlencode($v);
+	$testv = (is_array($v) ? count($v) : strlen($v));
+	$v_read = null;
+	// lire les variables et agir
+	foreach ($url as $n => $val) {
+		if (preg_match($regexp, urldecode($val), $r)) {
+			$r = array_pad($r, 3, null);
+			if ($v === null) {
+				// c'est un tableau, on memorise les valeurs
+				if (substr($r[1], -2) == "[]") {
+					if (!$v_read) {
+						$v_read = array();
+					}
+					$v_read[] = $r[2] ? substr($r[2], 1) : '';
+				} // c'est un scalaire, on retourne direct
+				else {
+					return $r[2] ? substr($r[2], 1) : '';
+				}
+			} // suppression
+			elseif (!$testv) {
+				unset($url[$n]);
+			}
+			// Ajout. Pour une variable, remplacer au meme endroit,
+			// pour un tableau ce sera fait dans la prochaine boucle
+			elseif (substr($r[1], -2) != '[]') {
+				$url[$n] = $r[1] . '=' . $u;
+				unset($ajouts[$r[1]]);
+			}
+			// Pour les tableaux on laisse tomber les valeurs de
+			// départ, on remplira à l'étape suivante
+			else {
+				unset($url[$n]);
+			}
+		}
+	}
+
+	// traiter les parametres pas encore trouves
+	if ($v === null
+		and $args = func_get_args()
+		and count($args) == 2
+	) {
+		return $v_read; // rien trouve ou un tableau
+	} elseif ($testv) {
+		foreach ($ajouts as $k => $n) {
+			if (!is_array($v)) {
+				$url[] = $k . '=' . $u;
+			} else {
+				$id = (substr($k, -2) == '[]') ? $k : ($k . "[]");
+				foreach ($v as $w) {
+					$url[] = $id . '=' . (is_array($w) ? 'Array' : $w);
+				}
+			}
+		}
+	}
+
+	// eliminer les vides
+	$url = array_filter($url);
+
+	// recomposer l'adresse
+	if ($url) {
+		$a .= '?' . join($sep, $url);
+	}
+
+	return $a . $ancre;
+} // function
+} // !function_exists
+
+/////////
 
 // "define if not defined"
 function defaults($d,$v) {
@@ -89,7 +222,8 @@ $vardom=array(
 	'SORT1'	=> '/^[AHSMCDTZ]$/',	// first sort key
 	'SORT2'	=> '/^[DA]$/',			// second sort key
 	'AGGR'	=> '/^\d+$/',			// aggregation by dir level
-	'SEARCH'	=> '~^[a-zA-Z0-9/_.-]*$~'			// aggregation by dir level
+	'SEARCH'	=> '~^[a-zA-Z0-9/_.-]*$~',			// aggregation by dir level
+	'TYPECACHE' => '/^(ALL|SESSIONS|SESSIONS_AUTH)$/',	//
 );
 
 // cache scope
@@ -926,6 +1060,7 @@ EOB;
 		"<option value=A",$MYREQUEST['SCOPE']=='A' ? " selected":"",">Active</option>",
 		"<option value=D",$MYREQUEST['SCOPE']=='D' ? " selected":"",">Deleted</option>",
 		"</select>",
+		
 		", Sorting:<select name=SORT1>",
 		"<option value=H",$MYREQUEST['SORT1']=='H' ? " selected":"",">Hits</option>",
 		"<option value=Z",$MYREQUEST['SORT1']=='Z' ? " selected":"",">Size</option>",
@@ -938,10 +1073,12 @@ EOB;
 		"<option value=D",$MYREQUEST['SORT1']=='T' ? " selected":"",">Timeout</option>";
 	echo
 		'</select>',
+		
 		'<select name=SORT2>',
 		'<option value=D',$MYREQUEST['SORT2']=='D' ? ' selected':'','>DESC</option>',
 		'<option value=A',$MYREQUEST['SORT2']=='A' ? ' selected':'','>ASC</option>',
 		'</select>',
+		
 		'<select name=COUNT onChange="form.submit()">',
 		'<option value=10 ',$MYREQUEST['COUNT']=='10' ? ' selected':'','>Top 10</option>',
 		'<option value=20 ',$MYREQUEST['COUNT']=='20' ? ' selected':'','>Top 20</option>',
@@ -954,6 +1091,14 @@ EOB;
 		'</select>',
     '&nbsp; Search: <input name=SEARCH value="',$MYREQUEST['SEARCH'],'" type=text size=25/>',
 		'&nbsp;<input type=submit value="GO!">',
+
+		'Type caches',
+		'<select name=TYPECACHE>',
+		'<option value=ALL',$MYREQUEST['TYPECACHE']=='ALL' ? ' selected':'','>Tous</option>',
+		'<option value=SESSIONS',$MYREQUEST['TYPECACHE']=='SESSIONS' ? ' selected':'','>Sessionnés</option>',
+		'<option value=SESSIONS_AUTH',$MYREQUEST['TYPECACHE']=='SESSIONS_AUTH' ? ' selected':'','>Sessionnés identifiés</option>',
+		'</select>',
+
 		'</form></div>';
 
   if (isset($MYREQUEST['SEARCH'])) {
@@ -1013,15 +1158,31 @@ EOB;
 			case "D":	ksort($list);	break;
 		}
 
+		$TYPECACHE=(isset($MYREQUEST['TYPECACHE'])?$MYREQUEST['TYPECACHE']:'ALL');
+		switch ($TYPECACHE) {
+			case 'ALL':
+				$pattern_typecache = '//';
+				break;
+			case 'SESSIONS' :
+				$pattern_typecache = '/_([a-f0-9]{8}|)$/i';
+				break;
+			case 'SESSIONS_AUTH' :
+				$pattern_typecache = '/_[a-f0-9]{8}$/i';
+				break;
+		};
+
 		// output list
 		$i=0;
 		foreach($list as $k => $entry) {
-      if(!$MYREQUEST['SEARCH'] || preg_match($MYREQUEST['SEARCH'], $entry[$fieldname]) != 0) {
+
+      if ((!$MYREQUEST['SEARCH'] || preg_match($MYREQUEST['SEARCH'], $entry[$fieldname]))
+		and preg_match($pattern_typecache, $entry[$fieldname])) {
 		$sh=md5($entry["info"]);
+
         $field_value = htmlentities(strip_tags($entry[$fieldname],''), ENT_QUOTES, 'UTF-8');
         echo
           '<tr id="key-'. $sh .'" class=tr-',$i%2,'>',
-          "<td class=td-0><a href=\"$MY_SELF&OB=",$MYREQUEST['OB'],"&SH=",$sh,"#key-". $sh ."\">",$field_value,'</a></td>',
+          "<td class=td-0><a href=\"$MY_SELF&OB=",$MYREQUEST['OB'],"&SH={$sh}&TYPECACHE={$TYPECACHE}#key-{$sh}\">",$field_value,'</a></td>',
           '<td class="td-n center">',$entry['num_hits'],'</td>',
           '<td class="td-n right">',$entry['mem_size'],'</td>',
           '<td class="td-n center">',date(DATE_FORMAT,$entry['access_time']),'</td>',
@@ -1048,7 +1209,32 @@ EOB;
         echo '</tr>';
 		if ($sh == $MYREQUEST["SH"]) {
 			echo '<tr>';
-			echo '<td colspan="7"><pre>'.htmlentities(print_r(apcu_fetch($entry['info']), 1)).'</pre></td>';
+			echo '<td colspan="7"><pre>';
+			
+			$self = "http".(!empty($_SERVER['HTTPS'])?"s":"")."://".$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI'];
+			if (isset($_GET['texte']) and ($_GET['texte']=='court')) {
+				$url = parametre_url($self,'texte','long')."#key-$sh";
+				$menu = "<a href='$url'>[Voir tout le texte]</a><br>";
+			}
+			else {
+				$url = parametre_url($self,'texte','court')."#key-$sh";
+				$menu = "<a href='$url'>[Voir texte abbrégé]</a><br>";
+			}
+
+			if (apcu_exists($entry['info'])) {
+				$d = apcu_fetch($entry['info'], $success);
+				if ($success) {
+					echo $menu;
+					if (is_array($d) and (count ($d)==1) and is_serialized($d[0]))
+						echo "<xmp>".spipsafe_unserialize($d[0])."</xmp>";
+					else
+						echo "fetch ok<br><xmp>".print_r($d, 1)."</xmp>";
+				} else 
+					echo "fetch failed";
+			}
+			else 
+				echo '(doesnt exist)';
+			echo '</pre></td>';
 			echo '</tr>';
 		}
         $i++;
