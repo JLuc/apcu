@@ -236,7 +236,7 @@ $vardom=array(
 	'SORT2'	=> '/^[DA]$/',			// second sort key
 	'AGGR'	=> '/^\d+$/',			// aggregation by dir level
 	'SEARCH'	=> '~^[a-zA-Z0-9/_.-]*$~',			// aggregation by dir level
-	'TYPECACHE' => '/^(ALL|SESSIONS|SESSIONS_AUTH)$/',	//
+	'TYPECACHE' => '/^(ALL|SESSIONS|SESSIONS_AUTH|FORMULAIRES)$/',	//
 	'ZOOM' => '/^(|TEXTECOURT|TEXTELONG)$/',	//
 	'EXTRA' => '/^(|CONTEXTE|CONTEXTE_SPECIAUX|INVALIDEURS|INVALIDEURS_SPECIAUX)$/',	//
 );
@@ -1117,6 +1117,7 @@ EOB;
 		'<option value=ALL',$MYREQUEST['TYPECACHE']=='ALL' ? ' selected':'','>Tous</option>',
 		'<option value=SESSIONS',$MYREQUEST['TYPECACHE']=='SESSIONS' ? ' selected':'','>Sessionnés</option>',
 		'<option value=SESSIONS_AUTH',$MYREQUEST['TYPECACHE']=='SESSIONS_AUTH' ? ' selected':'','>Sessionnés identifiés</option>',
+		'<option value=FORMULAIRES',$MYREQUEST['TYPECACHE']=='FORMULAIRES' ? ' selected':'','>Formulaires</option>',
 		'</select>',
 
 		'&nbsp;&nbsp;Textes zooms: ',
@@ -1204,6 +1205,9 @@ EOB;
 			case 'SESSIONS_AUTH' :
 				$pattern_typecache = '/_[a-f0-9]{8}$/i';
 				break;
+			case 'FORMULAIRES' :
+				$pattern_typecache = '~formulaires/~i';
+				break;
 		};
 
 		// output list
@@ -1220,6 +1224,7 @@ EOB;
           "<td class=td-0>
 			<a href=\"$MY_SELF&OB={$MYREQUEST['OB']}&SH={$sh}&TYPECACHE={$TYPECACHE}&ZOOM={$MYREQUEST['ZOOM']}&EXTRA={$MYREQUEST['EXTRA']}#key-{$sh}\">",$field_value,'</a>';
 			if ($MYREQUEST['EXTRA'] 
+					and ($sh != $MYREQUEST["SH"]) // sinon yaura un zoom après et c'est inutile de répéter ici
 					and apcu_exists($entry['info'])
 					and ($data = apcu_fetch($entry['info'], $success))
 					and $success and is_array($data) and (count ($data)==1) 
